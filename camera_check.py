@@ -4,6 +4,7 @@
     py -3.12 camera_check.py                 # ใช้กล้องตัวที่ 0
     py -3.12 camera_check.py --cam 1         # ใช้กล้องตัวอื่น
     py -3.12 camera_check.py --image a.png   # ทดสอบกับรูปนิ่ง (ไม่ต้องมีกล้อง)
+    py -3.12 camera_check.py --exposure -6   # ล็อกค่า exposure ถ้าแสงยังขึ้นลง
 
 ปุ่ม
     m  ลองจับคู่บล็อกกับช่อง (เรียก solve จาก algo.py) แล้ววาดผลทับภาพ
@@ -11,8 +12,12 @@
     s  บันทึกภาพดิบและภาพ threshold ไว้ทดสอบทีหลัง
     q / Esc  ออก
 
-ฝั่งซ้ายของเส้นแบ่ง = พื้นที่บล็อก (บล็อกสีอ่อนบนพื้นเข้ม)
-ฝั่งขวาของเส้นแบ่ง = กระดาน (ช่องเป็นรูมืด จึงกลับสีให้ช่องเป็นสีขาว)
+ฝั่งซ้ายของเส้นแบ่ง = พื้นที่บล็อก   ฝั่งขวาของเส้นแบ่ง = กระดาน
+auto invert = 1: ดูสีพื้นจากขอบภาพแต่ละฝั่งแล้วกลับสีให้เอง จึงใช้ได้ทั้งพื้นสว่างและพื้นมืด
+    บล็อก: ทำให้พื้นเป็นสีดำ บล็อกจึงเป็นสีขาว (พื้นขาว + บล็อกดำ -> กลับสี)
+    ช่อง : ทำให้พื้นเป็นสีขาวแล้วลบออกด้วย clear_border ช่องที่มองทะลุถึงพื้นจึงเหลือเป็นสีขาว
+           ส่วนตัวกระดานเป็นสีดำ (พื้นขาว + กระดานเข้ม + ช่องสว่าง -> ไม่กลับสี)
+auto invert = 0: ใช้แถบ invert blocks / invert holes กำหนดเอง
 """
 import argparse
 import time
@@ -26,7 +31,7 @@ WIN_BW = "binary (left: blocks | right: holes)"
 MIN_WIDTH_PX = 50        # บล็อกควรกว้างอย่างน้อยเท่านี้ในภาพ
 
 
-def open_camera(index, width, height):
+def open_camera(index, width, height, exposure=None):
     cap = cv2.VideoCapture(index, cv2.CAP_DSHOW)   # DSHOW บน Windows ตั้งค่ากล้องได้มากกว่า
     if not cap.isOpened():
         cap = cv2.VideoCapture(index)
@@ -37,10 +42,14 @@ def open_camera(index, width, height):
     # ปิด auto เพื่อไม่ให้ภาพสว่างขึ้นลงตอนแขนเข้ามาในภาพ (บางรุ่นไม่รองรับ จะไม่มีผล)
     cap.set(cv2.CAP_PROP_AUTOFOCUS, 0)
     cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, 0.25)
+    if exposure is not None:
+        # บน Windows (DSHOW) การตั้ง exposure ตรงๆ จะปิด auto exposure ไปด้วย ค่าปกติประมาณ -4 ถึง -8
+        cap.set(cv2.CAP_PROP_EXPOSURE, exposure)
     w = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
     h = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
     print(f"กล้อง {index}: {w:.0f}x{h:.0f}  autofocus={cap.get(cv2.CAP_PROP_AUTOFOCUS):.0f}  "
-          f"auto_exposure={cap.get(cv2.CAP_PROP_AUTO_EXPOSURE):.2f}")
+          f"auto_exposure={cap.get(cv2.CAP_PROP_AUTO_EXPOSURE):.2f}  "
+          f"exposure={cap.get(cv2.CAP_PROP_EXPOSURE):.1f}")
     return cap
 
 
@@ -60,15 +69,26 @@ def binarize(gray, thresh, invert):
     return clear_border(bw)
 
 
-def process(frame, thresh, blur, split, hole_invert):
-    """คืน (ภาพบล็อกขาวดำ, ภาพช่องขาวดำ, ตำแหน่งเส้นแบ่ง x, ความสว่างเฉลี่ย)"""
+def background_is_light(gray, thresh):
+    """ดูความสว่างของพื้นจากขอบภาพ (ใช้ median เพื่อไม่ให้วัตถุที่แตะขอบมีผลมาก)"""
+    border = np.r_[gray[0], gray[-1], gray[:, 0], gray[:, -1]]
+    return float(np.median(border)) > thresh
+
+
+def process(frame, thresh, blur, split, auto, block_invert, hole_invert):
+    """คืน (ภาพบล็อกขาวดำ, ภาพช่องขาวดำ, ตำแหน่งเส้นแบ่ง x, ความสว่างเฉลี่ย, (กลับสีบล็อก, กลับสีช่อง))"""
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY) if frame.ndim == 3 else frame
     if blur > 0:
         gray = cv2.GaussianBlur(gray, (2 * blur + 1, 2 * blur + 1), 0)
     sx = int(np.clip(split, 5, 95) / 100 * gray.shape[1])
-    bw_block = binarize(gray[:, :sx], thresh, invert=False)
-    bw_hole = binarize(gray[:, sx:], thresh, invert=bool(hole_invert))
-    return bw_block, bw_hole, sx, float(gray.mean())
+    g_block, g_hole = gray[:, :sx], gray[:, sx:]
+    if auto:
+        block_invert = background_is_light(g_block, thresh)      # พื้นสว่าง -> กลับสีให้บล็อกเป็นสีขาว
+        hole_invert = not background_is_light(g_hole, thresh)    # พื้นมืด -> กลับสีให้พื้น (และช่อง) เป็นสีขาว
+    block_invert, hole_invert = bool(block_invert), bool(hole_invert)
+    bw_block = binarize(g_block, thresh, invert=block_invert)
+    bw_hole = binarize(g_hole, thresh, invert=hole_invert)
+    return bw_block, bw_hole, sx, float(gray.mean()), (block_invert, hole_invert)
 
 
 def draw_objects(vis, bw, dx, color, label):
@@ -115,6 +135,7 @@ def main():
     ap.add_argument("--image", help="ใช้รูปนิ่งแทนกล้อง")
     ap.add_argument("--width", type=int, default=1280)
     ap.add_argument("--height", type=int, default=720)
+    ap.add_argument("--exposure", type=float, help="ล็อกค่า exposure (เช่น -6) เพื่อไม่ให้แสงขึ้นลง")
     args = ap.parse_args()
 
     cap = None
@@ -124,14 +145,16 @@ def main():
         if still is None:
             raise SystemExit(f"เปิดรูป {args.image} ไม่ได้")
     else:
-        cap = open_camera(args.cam, args.width, args.height)
+        cap = open_camera(args.cam, args.width, args.height, args.exposure)
 
     cv2.namedWindow(WIN, cv2.WINDOW_NORMAL)
     cv2.namedWindow(WIN_BW, cv2.WINDOW_NORMAL)
     cv2.createTrackbar("threshold", WIN, 127, 255, lambda v: None)
     cv2.createTrackbar("blur", WIN, 1, 10, lambda v: None)
     cv2.createTrackbar("split %", WIN, 50, 100, lambda v: None)
-    cv2.createTrackbar("invert holes", WIN, 1, 1, lambda v: None)
+    cv2.createTrackbar("auto invert", WIN, 1, 1, lambda v: None)
+    cv2.createTrackbar("invert blocks", WIN, 1, 1, lambda v: None)   # ใช้เมื่อ auto invert = 0
+    cv2.createTrackbar("invert holes", WIN, 0, 1, lambda v: None)
 
     result = None
     bright_hist = []
@@ -147,8 +170,11 @@ def main():
         thresh = cv2.getTrackbarPos("threshold", WIN)
         blur = cv2.getTrackbarPos("blur", WIN)
         split = cv2.getTrackbarPos("split %", WIN)
-        inv = cv2.getTrackbarPos("invert holes", WIN)
-        bw_block, bw_hole, sx, bright = process(frame, thresh, blur, split, inv)
+        auto = cv2.getTrackbarPos("auto invert", WIN)
+        inv_b = cv2.getTrackbarPos("invert blocks", WIN)
+        inv_h = cv2.getTrackbarPos("invert holes", WIN)
+        bw_block, bw_hole, sx, bright, (inv_b, inv_h) = process(frame, thresh, blur, split,
+                                                                 auto, inv_b, inv_h)
 
         # ความสว่างย้อนหลังประมาณ 2 วินาที ใช้ดูว่าแสงนิ่งไหม
         bright_hist = (bright_hist + [bright])[-60:]
@@ -166,6 +192,8 @@ def main():
             (f"blocks: {nb}   holes: {nh}", ok_c if nb == nh and nb > 0 else bad_c),
             (f"too small (<{MIN_WIDTH_PX}px): {small_b + small_h}", ok_c if small_b + small_h == 0 else bad_c),
             (f"brightness {bright:.0f}  swing {swing:.1f}", ok_c if swing < 8 else bad_c),
+            (f"invert blocks={int(inv_b)} holes={int(inv_h)} ({'auto' if auto else 'manual'})",
+             (255, 255, 255)),
             ("[m] match  [c] clear  [s] save  [q] quit", (255, 255, 255)),
         ])
 
