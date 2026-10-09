@@ -131,7 +131,7 @@ def put_status(vis, lines):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--cam", type=int, default=0, help="หมายเลขกล้อง")
+    ap.add_argument("--cam", type=int, default=1, help="หมายเลขกล้อง")
     ap.add_argument("--image", help="ใช้รูปนิ่งแทนกล้อง")
     ap.add_argument("--width", type=int, default=1280)
     ap.add_argument("--height", type=int, default=720)
