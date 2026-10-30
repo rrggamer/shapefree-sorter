@@ -1,9 +1,9 @@
 """เหมือน camera_check.py แต่เส้นแบ่งเป็นแนวนอน (บน / ล่าง) แทนซ้าย / ขวา
 
 วิธีใช้ (รันจากโฟลเดอร์โปรเจกต์)
-    python test/camera_check_h.py                 # กล้องตัวที่ 1
-    python test/camera_check_h.py --cam 0
-    python test/camera_check_h.py --image a.png   # ทดสอบกับรูปนิ่ง
+    py -3.12 app/camera_check_h.py                 # กล้องตัวที่ 1
+    py -3.12 app/camera_check_h.py --cam 0
+    py -3.12 app/camera_check_h.py --image a.png   # ทดสอบกับรูปนิ่ง
 
 แถบเลื่อน
     split %       ตำแหน่งเส้นแบ่ง (% ของความสูงภาพ นับจากบน)
@@ -11,21 +11,16 @@
     ที่เหลือเหมือน camera_check.py
 
 ปุ่ม  m จับคู่   c ล้าง   s บันทึกภาพ   q / Esc ออก
-     a  ตั้งกรอบพื้นที่ทำงาน: คลิก 4 มุมของกระดาษขาว (u = ย้อน) ครบ 4 จุดแล้วเซฟลง test/work_area.json เอง
+     a  ตั้งกรอบพื้นที่ทำงาน: คลิก 4 มุมของกระดาษขาว (u = ย้อน) ครบ 4 จุดแล้วเซฟลง app/work_area.json เอง
         นอกกรอบจะถูกมองเป็นพื้นขาว จึงไม่นับของเกะกะรอบโต๊ะ   x  ลบกรอบ (ดูทั้งภาพ)
 """
 import argparse
 import json
 import os
-import sys
 import time
 
 import cv2
 import numpy as np
-
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)      # ใช้ฟังก์ชันจาก camera_check.py / algo.py (ไม่แก้ไฟล์เดิม)
 
 from camera_check import (MIN_WIDTH_PX, background_is_light, binarize, draw_objects,  # noqa: E402
                           open_camera, put_status)

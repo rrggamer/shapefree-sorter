@@ -1,10 +1,10 @@
 """เช็กกล้องก่อน calibrate: ดูภาพ threshold สด ปรับค่าด้วยแถบเลื่อน และดูว่า detect() เห็นอะไร
 
 วิธีใช้
-    py -3.12 camera_check.py                 # ใช้กล้องตัวที่ 0
-    py -3.12 camera_check.py --cam 1         # ใช้กล้องตัวอื่น
-    py -3.12 camera_check.py --image a.png   # ทดสอบกับรูปนิ่ง (ไม่ต้องมีกล้อง)
-    py -3.12 camera_check.py --exposure -6   # ล็อกค่า exposure ถ้าแสงยังขึ้นลง
+    py -3.12 app/camera_check.py                 # ใช้กล้องตัวที่ 1
+    py -3.12 app/camera_check.py --cam 1         # ใช้กล้องตัวอื่น
+    py -3.12 app/camera_check.py --image a.png   # ทดสอบกับรูปนิ่ง (ไม่ต้องมีกล้อง)
+    py -3.12 app/camera_check.py --exposure -6   # ล็อกค่า exposure ถ้าแสงยังขึ้นลง
 
 ปุ่ม
     m  ลองจับคู่บล็อกกับช่อง (เรียก solve จาก algo.py) แล้ววาดผลทับภาพ

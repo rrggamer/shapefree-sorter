@@ -1,15 +1,14 @@
 """หยิบบล็อกทีละชิ้นไปวางลงช่อง: กล้อง -> algo.solve() -> แปลงเป็น มม. ด้วย calib.json -> แขนหยิบ หมุน วาง
 
-*** ร่างแรก ยังไม่เคยลองกับแขนจริง ***
-ต้อง calibrate ให้ได้ test/calib.json ก่อน และกรอกค่าในส่วน "ค่าที่ต้องวัดเอง" ข้างล่างให้ครบ
+ต้องมี app/calib.json (จาก calibrate.py) และ app/work_area.json (จากปุ่ม a ใน camera_check_h.py) ก่อน
 
 วิธีใช้ (รันจากโฟลเดอร์โปรเจกต์)
-    py -3.12 test/pick_place.py                    # โหมดซ้อม: แขนไม่ขยับ แค่วาดแผนบนภาพ + พิมพ์พิกัด
-    py -3.12 test/pick_place.py --run              # ทำจริง: แขนหยิบวาง
-    py -3.12 test/pick_place.py --run --no-grip    # แขนเคลื่อนตามแผนจริง แต่ไม่สั่งหัวดูด (ทดสอบท่าทาง)
-    py -3.12 test/pick_place.py --thresh 78 --blur 4    # ค่าเดียวกับที่ปรับใน camera_check_h.py
+    py -3.12 app/pick_place.py                    # โหมดซ้อม: แขนไม่ขยับ แค่วาดแผนบนภาพ + พิมพ์พิกัด
+    py -3.12 app/pick_place.py --run              # ทำจริง: แขนหยิบวาง
+    py -3.12 app/pick_place.py --run --no-grip    # แขนเคลื่อนตามแผนจริง แต่ไม่สั่งหัวดูด (ทดสอบท่าทาง)
+    py -3.12 app/pick_place.py --thresh 78 --blur 4    # ค่าเดียวกับที่ปรับใน camera_check_h.py
 
-ไม่ใช้เส้นแบ่งแล้ว: วางบล็อกกับกระดานตรงไหนก็ได้ในกรอบพื้นที่ทำงาน (test/work_area.json ตั้งด้วยปุ่ม a ใน camera_check_h.py)
+วางบล็อกกับกระดานตรงไหนก็ได้ในกรอบพื้นที่ทำงาน (app/work_area.json)
     กระดาน = ก้อนสีเข้มที่ใหญ่ที่สุด, รู = ส่วนสีอ่อนข้างในกระดาน, บล็อก = ก้อนสีเข้มอื่นๆ
     วางบล็อกห่างจากกระดานนิดหน่อย ถ้าแตะกันจะถูกนับรวมเป็นกระดาน
 
@@ -31,17 +30,17 @@ from calib_utils import (Robot, ROBOT_IP, image_angle_to_r, in_workspace, load_c
 from camera_check import binarize, draw_objects, put_status
 from camera_check_h import area_mask, draw_matches_h, load_area
 
-# ===== ค่าที่ต้องวัดเอง (ใช้ py -3.12 test/calibrate.py pose) =====
+# ===== ค่าที่วัดจากแขนจริง (วัดด้วย py -3.12 app/calibrate.py pose) =====
 PICK_Z = -143.0            # z (มม.) ตอนหัวจับแตะผิวบนบล็อก
 PLACE_Z = -132.2           # z (มม.) ตอนปล่อยบล็อกลงช่อง (ผิวบนกระดาน + เผื่อเล็กน้อย)
 SAFE_Z = 6.1            # z (มม.) ที่เคลื่อนข้ามไปมาแล้วไม่ชนอะไร
 CLEAR_POS = (316.5, -168.6, 24.6, -86.3)  # (x, y, z, r) จุดที่แขนไปรอ ไม่บังกล้องตอนถ่ายภาพ
-GRIP_DO = 1              # ช่อง DO ที่สั่งหัวดูดลม (ต้องลองว่าช่องไหน)
+GRIP_DO = 1              # ช่อง DO ที่ต่อกับหัวดูดลม
 GRIP_ON = 1              # ค่าที่ทำให้ "จับ" (บางหัวจับกลับกัน ใช้ 0)
 GRIP_WAIT = 0.5          # วินาทีที่รอให้หัวจับหนีบ/ปล่อยเสร็จ
 R_SIGN = 1               # ถ้าทดสอบแล้วแขนหมุนกลับทาง ให้เปลี่ยนเป็น -1
 PICK_R = -70.0           # มุม r ตอนลงหยิบ (ตอนวางจะเป็น PICK_R + มุมที่คำนวณได้)
-SPEED = 20               # % ความเร็ว เริ่มช้าๆ ก่อน
+SPEED = 20               # % ความเร็วแขน
 USE_GRIP = True          # --no-grip ตั้งเป็น False
 COLLISION_LEVEL = 3      # ความไวตรวจชน 0 = ปิด, 1-5 (เลขมาก = ไวมาก ชนเบาๆ ก็หยุด)
 MOVE_TIMEOUT = 20.0      # วินาที ถ้าแขนยังไปไม่ถึงจุดหมายถือว่ามีปัญหา หยุดทำงาน
@@ -117,9 +116,8 @@ def make_plan(result, dy_b, dy_h, H, calib):
 
 
 def order_plan(plan, start=(0.0, 0.0)):
-    """เรียงลำดับหยิบแบบง่าย: เลือกบล็อกที่ใกล้ปลายแขนที่สุดก่อน (จุดตั้งต้นคือจุดวางชิ้นก่อนหน้า)
-    TODO (คน B): ลองวิธีอื่นที่ทำให้ระยะรวมสั้นกว่านี้ แล้ววิเคราะห์ Big-O
-    """
+    """เรียงลำดับหยิบแบบ greedy: เลือกบล็อกที่ใกล้ปลายแขนที่สุดก่อน (จุดตั้งต้นคือจุดวางชิ้นก่อนหน้า)
+    n ชิ้น ใช้เวลา O(n^2) ชิ้นที่ใส่ไม่ได้จะถูกต่อไว้ท้ายแผน"""
     todo = [p for p in plan if p["skip"] is None]
     done = []
     pos = np.array(CLEAR_POS[:2] if CLEAR_POS else start)
@@ -143,7 +141,7 @@ def check_config(calib=None):
     missing = [n for n, v in (("PICK_Z", PICK_Z), ("PLACE_Z", PLACE_Z), ("SAFE_Z", SAFE_Z),
                               ("CLEAR_POS", CLEAR_POS)) if v is None]
     if missing:
-        raise SystemExit("ยังไม่ได้กรอกค่า: " + ", ".join(missing) + " (แก้ที่หัวไฟล์ test/pick_place.py)")
+        raise SystemExit("ยังไม่ได้กรอกค่า: " + ", ".join(missing) + " (แก้ที่หัวไฟล์ app/pick_place.py)")
     if not (PICK_Z < SAFE_Z and PLACE_Z < SAFE_Z):
         raise SystemExit("SAFE_Z ต้องสูงกว่า PICK_Z และ PLACE_Z")
     if calib is not None:
@@ -277,7 +275,7 @@ def main():
 
     area = load_area()
     if area is None:
-        print("ยังไม่มี test/work_area.json จะดูทั้งภาพ (ตั้งกรอบด้วยปุ่ม a ใน camera_check_h.py)")
+        print("ยังไม่มี app/work_area.json จะดูทั้งภาพ (ตั้งกรอบด้วยปุ่ม a ใน camera_check_h.py)")
     mask = area_mask((calib["height"], calib["width"]), area) if area else None
 
     cap = open_camera(calib["cam"], calib["width"], calib["height"], args.exposure)
@@ -295,7 +293,7 @@ def main():
         cv2.imshow("pick_place", vis)
         cv2.waitKey(1)
         bw_b, bw_h, _ = find_objects(frame, args.thresh, args.blur, mask)
-        dy_b = dy_h = 0                                      # ไม่มีเส้นแบ่งแล้ว ภาพบล็อก/รูเป็นภาพเต็ม
+        dy_b = dy_h = 0                                      # ภาพบล็อก/รูเป็นภาพเต็ม จึงไม่ต้องเลื่อนพิกัด
         cnts, _ = cv2.findContours(bw_b, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
         pts = []
         for c in cnts:

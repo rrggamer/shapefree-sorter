@@ -1,10 +1,10 @@
-"""Calibrate กล้องกับแขน MG400: หาสูตรแปลง "พิกเซลในภาพ -> มม. ของแขน" แล้วเซฟไว้ใน test/calib.json
+"""Calibrate กล้องกับแขน MG400: หาสูตรแปลง "พิกเซลในภาพ -> มม. ของแขน" แล้วเซฟไว้ใน app/calib.json
 
 วิธีใช้ (รันจากโฟลเดอร์โปรเจกต์)
-    py -3.12 test/calibrate.py pose               # อ่าน x, y, z, r ตอนนี้ (กด Enter อ่านซ้ำ, q ออก)
-    py -3.12 test/calibrate.py calibrate          # คลิกจุดในภาพ -> jog แขนไปแตะ -> เซฟ calib.json
-    py -3.12 test/calibrate.py check              # คลิกในภาพแล้วดูว่าได้กี่ มม. (แขนไม่ขยับ)
-    py -3.12 test/calibrate.py check --move       # เหมือนข้างบน แต่กด g ให้แขนไปลอยเหนือจุดที่คลิก
+    py -3.12 app/calibrate.py pose               # อ่าน x, y, z, r ตอนนี้ (กด Enter อ่านซ้ำ, q ออก)
+    py -3.12 app/calibrate.py calibrate          # คลิกจุดในภาพ -> jog แขนไปแตะ -> เซฟ calib.json
+    py -3.12 app/calibrate.py check              # คลิกในภาพแล้วดูว่าได้กี่ มม. (แขนไม่ขยับ)
+    py -3.12 app/calibrate.py check --move       # เหมือนข้างบน แต่กด g ให้แขนไปลอยเหนือจุดที่คลิก
 
 ขั้นตอน calibrate
     1. ติดสติกเกอร์/จุดเล็กๆ บนโต๊ะ 5-6 จุด กระจายทั่วพื้นที่ทำงาน (4 มุม + กลาง) ทั้งฝั่งบล็อกและฝั่งกระดาน

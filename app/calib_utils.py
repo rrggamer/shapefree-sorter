@@ -1,4 +1,4 @@
-"""ฟังก์ชันที่ใช้ร่วมกันระหว่าง calibrate และงานหยิบวาง (ไม่แก้ไฟล์เดิมในโฟลเดอร์แม่ แค่ import มาใช้)
+"""ฟังก์ชันที่ใช้ร่วมกันระหว่าง calibrate และงานหยิบวาง
 
     pixel_to_robot(H, u, v)            พิกเซลในภาพ -> (x, y) มม. ของแขน
     image_angle_to_r(H, u, v, angle)   มุมหมุนจาก algo (องศาในภาพ) -> มุมที่ต้องหมุนแกน r ของแขน
@@ -8,18 +8,14 @@ import json
 import os
 import re
 import socket
-import sys
 import time
 
 import cv2
 import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(HERE)
-if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)      # ให้ import algo.py / camera_check.py จากโฟลเดอร์แม่ได้
 
-from camera_check import open_camera, process   # noqa: E402,F401  (ใช้ซ้ำ ไม่แก้)
+from camera_check import open_camera, process   # noqa: E402,F401
 from algo import solve                           # noqa: E402,F401
 
 CALIB_PATH = os.path.join(HERE, "calib.json")
@@ -82,7 +78,7 @@ def in_workspace(calib, x, y, margin=SAFE_MARGIN):
 # =============== แขน MG400 ===============
 class Robot:
     """เชื่อมต่อ MG400 2 พอร์ต: dashboard (ตั้งค่า/อ่านค่า) และ move (สั่งขยับ)
-    ต่างจาก dobot_api.py ตรงที่รอคำตอบจนครบ (ลงท้ายด้วย ;) และหยุดทันทีถ้าแขนตอบ error
+    ทุกคำสั่งจะรอคำตอบจนครบ (ลงท้ายด้วย ;) และหยุดทันทีถ้าแขนตอบ error
     """
 
     def __init__(self, ip=ROBOT_IP):
